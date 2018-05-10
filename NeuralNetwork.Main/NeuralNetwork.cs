@@ -1,4 +1,5 @@
-﻿using MathNet.Numerics.LinearAlgebra;
+﻿using System;
+using MathNet.Numerics.LinearAlgebra;
 
 // ReSharper disable InconsistentNaming
 
@@ -11,7 +12,7 @@ namespace NeuralNetworkNS.Main
         public Matrix<double> Weights_HO { get; set; }
         public Matrix<double> Bias_H { get; set; }
         public Matrix<double> Bias_O { get; set; }
-        public double LearningRate { get; set; } = 0.1;
+        public double LearningRate { get; set; } = 0.2;
 
         public NeuralNetwork(int inputNodeCount, int hiddenNodeCount, int outputNodeCount)
         {
@@ -30,27 +31,34 @@ namespace NeuralNetworkNS.Main
             return output.ToRowMajorArray();
         }
 
-        public void Train(double[] inputsArray, double[] targetsArray)
+        public void Train(double[] inputsArray, double[] targetsArray, bool debugFlag = false)
         {
+            Debug($"Training: {inputsArray[0]} {inputsArray[1]} | {targetsArray[0]}", debugFlag);
             var inputs = M.DenseOfColumnArrays(inputsArray);
             var hiddens = CalculateHiddenLayer(inputs);
             var outputs = CalculateOutputLayer(hiddens);
-
+            Debug($"Output: {outputs[0, 0]:F6}", debugFlag);
             var targets = M.DenseOfColumnArrays(targetsArray);
-            var outputErrors = targets.Subtract(outputs);
+            var outputErrors = targets - outputs;
 
-            var outputGradients = outputs.Map(MathNet.Numerics.SpecialFunctions.Logit) * outputErrors * LearningRate;
+            var outputGradients = outputs.Map(dSigma).PointwiseMultiply(outputErrors) * LearningRate;
+            Debug($"Output Gradients: {outputGradients[0, 0]:F6}", debugFlag);
 
             var weightHODeltas = outputGradients * hiddens.Transpose();
 
+            Debug($"HO Weights Before: {Weights_HO[0,0]}", debugFlag);
             Weights_HO = Weights_HO + weightHODeltas;
+            Debug($"HO Weights After: {Weights_HO[0, 0]}", debugFlag);
+
+
+            if (double.IsNaN(Weights_HO[0, 0]))
+                throw new Exception("WTF!");
+
             Bias_O = Bias_O + outputGradients;
 
             var hiddenErrors = Weights_HO.Transpose() * outputErrors;
 
-            var hiddenGradients = hiddens.Map(MathNet.Numerics.SpecialFunctions.Logit);
-            hiddenGradients = hiddenGradients * hiddenErrors;
-            hiddenGradients = hiddenGradients * LearningRate;
+            var hiddenGradients = hiddens.Map(dSigma).PointwiseMultiply(hiddenErrors) * LearningRate;
 
             var wightIHDeltas = hiddenGradients * inputs.Transpose();
 
@@ -60,16 +68,23 @@ namespace NeuralNetworkNS.Main
 
         private Matrix<double> CalculateHiddenLayer(Matrix<double> inputs)
         {
-            var hiddens = Weights_IH * inputs + Bias_H;
-            hiddens = hiddens.Map(MathNet.Numerics.SpecialFunctions.Logistic);
-            return hiddens;
+            return (Weights_IH * inputs + Bias_H).Map(MathNet.Numerics.SpecialFunctions.Logistic);
         }
 
         private Matrix<double> CalculateOutputLayer(Matrix<double> hiddens)
         {
-            var output = Weights_HO * hiddens + Bias_O;
-            output = output.Map(MathNet.Numerics.SpecialFunctions.Logistic);
-            return output;
+            return (Weights_HO * hiddens + Bias_O).Map(MathNet.Numerics.SpecialFunctions.Logistic);
+        }
+
+        private double dSigma(double x)
+        {
+            return x * (1 - x);
+        }
+
+        private void Debug(string message, bool flag)
+        {
+            if(flag)
+                Console.WriteLine(message);
         }
     }
 }
