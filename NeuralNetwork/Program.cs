@@ -7,7 +7,7 @@ namespace NeuralNetworkNS.Console
 {
     class Program
     {
-        public static int Resolution { get; set; } = 10;
+        public static int Resolution { get; set; } = 30;
 
 
         static void Main(string[] args)
@@ -29,25 +29,24 @@ namespace NeuralNetworkNS.Console
                 var index = random.Next(0, 4);
                 var (inputs, targets) = data[index];
                 nn.Train(inputs, targets);
-                var result = nn.Predict(new double[] { 0, 1 })[0];
-                var result2 = nn.Predict(new double[] { 1, 1 })[0];
                 Draw(nn);
             }
         }
 
         private static void Draw(NeuralNetwork nn)
         {
-            for (var i = 0; i < Resolution; i++)
+            for (var i = 1; i <= Resolution; i++)
             {
-                for (var j = 0; j < Resolution; j++)
+                for (var j = 1; j <= Resolution; j++)
                 {
                     var x1 = (double) i / Resolution;
                     var x2 = (double) j / Resolution;
                     var inputs = new[] {x1, x2};
                     var y = nn.Predict(inputs)[0];
-                    System.Console.ForegroundColor =
-                        NearestConsoleColor.ClosestConsoleColor((byte) (y * 255), (byte) (y * 255), (byte) (y * 255));
-                    System.Console.Write("i");
+                    var byFifteen = Math.Round(y * 15);
+                    var byNine = Math.Round(y * 9);
+                    System.Console.ForegroundColor = (ConsoleColor) byFifteen;
+                    System.Console.Write($"{byNine} ");
                 }
                 System.Console.Write("\r\n");
             }

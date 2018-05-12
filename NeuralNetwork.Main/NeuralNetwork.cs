@@ -8,11 +8,11 @@ namespace NeuralNetworkNS.Main
     public class NeuralNetwork
     {
         private readonly MatrixBuilder<double> M = Matrix<double>.Build;
-        public Matrix<double> Weights_IH { get; set; }
-        public Matrix<double> Weights_HO { get; set; }
-        public Matrix<double> Bias_H { get; set; }
-        public Matrix<double> Bias_O { get; set; }
-        public double LearningRate { get; set; } = 0.2;
+        private Matrix<double> Weights_IH;
+        private Matrix<double> Weights_HO;
+        private Matrix<double> Bias_H;
+        private Matrix<double> Bias_O;
+        public double LearningRate { get; set; } = 0.3;
 
         public NeuralNetwork(int inputNodeCount, int hiddenNodeCount, int outputNodeCount)
         {
@@ -22,48 +22,36 @@ namespace NeuralNetworkNS.Main
             Bias_O = M.Random(outputNodeCount, 1);
         }
 
-        public double[] Predict(double[] inputsArray)
+        private (Matrix<double> inputs, Matrix<double> hiddens, Matrix<double> output) FeedForward(double[] inputsArray)
         {
             var inputs = M.DenseOfColumnArrays(inputsArray);
             var hiddens = CalculateHiddenLayer(inputs);
-            var output = CalculateOutputLayer(hiddens);
+            var outputs = CalculateOutputLayer(hiddens);
 
-            return output.ToRowMajorArray();
+            return (inputs, hiddens, outputs);
+        }
+
+        public double[] Predict(double[] inputsArray)
+        {
+            var (_,_,outputs) = FeedForward(inputsArray);
+
+            return outputs.ToRowMajorArray();
         }
 
         public void Train(double[] inputsArray, double[] targetsArray, bool debugFlag = false)
         {
-            Debug($"Training: {inputsArray[0]} {inputsArray[1]} | {targetsArray[0]}", debugFlag);
-            var inputs = M.DenseOfColumnArrays(inputsArray);
-            var hiddens = CalculateHiddenLayer(inputs);
-            var outputs = CalculateOutputLayer(hiddens);
-            Debug($"Output: {outputs[0, 0]:F6}", debugFlag);
-            var targets = M.DenseOfColumnArrays(targetsArray);
-            var outputErrors = targets - outputs;
+            var (inputs, hiddens, outputs) = FeedForward(inputsArray);
+            var outputErrors = M.DenseOfColumnArrays(targetsArray) - outputs;
+            AdjustLayer(outputErrors, outputs, hiddens, ref Weights_HO, ref Bias_O);
+            AdjustLayer(outputErrors, hiddens, inputs, ref Weights_IH, ref Bias_H);
+        }
 
-            var outputGradients = outputs.Map(dSigma).PointwiseMultiply(outputErrors) * LearningRate;
-            Debug($"Output Gradients: {outputGradients[0, 0]:F6}", debugFlag);
-
-            var weightHODeltas = outputGradients * hiddens.Transpose();
-
-            Debug($"HO Weights Before: {Weights_HO[0,0]}", debugFlag);
-            Weights_HO = Weights_HO + weightHODeltas;
-            Debug($"HO Weights After: {Weights_HO[0, 0]}", debugFlag);
-
-
-            if (double.IsNaN(Weights_HO[0, 0]))
-                throw new Exception("WTF!");
-
-            Bias_O = Bias_O + outputGradients;
-
-            var hiddenErrors = Weights_HO.Transpose() * outputErrors;
-
-            var hiddenGradients = hiddens.Map(dSigma).PointwiseMultiply(hiddenErrors) * LearningRate;
-
-            var wightIHDeltas = hiddenGradients * inputs.Transpose();
-
-            Weights_IH = Weights_IH + wightIHDeltas;
-            Bias_H = Bias_H + hiddenGradients;
+        private void AdjustLayer(Matrix<double> outputErrors, Matrix<double> outputs, Matrix<double> hiddens, ref Matrix<double> weights, ref Matrix<double> bias)
+        {
+            var gradients = CalculateGradients(outputs, outputErrors);
+            var deltas = CalculateDeltas(gradients, hiddens);
+            weights = weights + deltas;
+            bias = bias + gradients;
         }
 
         private Matrix<double> CalculateHiddenLayer(Matrix<double> inputs)
@@ -76,15 +64,19 @@ namespace NeuralNetworkNS.Main
             return (Weights_HO * hiddens + Bias_O).Map(MathNet.Numerics.SpecialFunctions.Logistic);
         }
 
+        private Matrix<double> CalculateGradients(Matrix<double> layer, Matrix<double> errors)
+        {
+            return layer.Map(dSigma).PointwiseMultiply(errors) * LearningRate;
+        }
+
+        private static Matrix<double> CalculateDeltas(Matrix<double> gradients, Matrix<double> feed)
+        {
+            return gradients * feed.Transpose();
+        }
+
         private double dSigma(double x)
         {
             return x * (1 - x);
-        }
-
-        private void Debug(string message, bool flag)
-        {
-            if(flag)
-                Console.WriteLine(message);
         }
     }
 }
